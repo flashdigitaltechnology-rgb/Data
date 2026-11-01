@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WiFi Bill Management - Ahmad Basyit</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;font-family:Arial,sans-serif}
+  body{background:#f0f2f5;color:#333}
+  header{background:#1e3c72;color:#fff;padding:16px 24px}
+  header h1{font-size:20px}
+  header small{opacity:.8;font-size:12px}
+  nav{background:#fff;display:flex;gap:2px;padding:0 16px;box-shadow:0 2px 6px rgba(0,0,0,.08);overflow-x:auto}
+  nav button{background:none;border:none;padding:14px 18px;cursor:pointer;font-size:14px;font-weight:bold;color:#666;border-bottom:3px solid transparent;white-space:nowrap}
+  nav button.active{color:#2a5298;border-bottom-color:#2a5298}
+  main{padding:20px;max-width:1100px;margin:auto}
+  .page{display:none}.page.active{display:block}
+  .card{background:#fff;border-radius:10px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:18px}
+  .card h2{font-size:17px;margin-bottom:14px;color:#1e3c72;border-left:4px solid #2a5298;padding-left:10px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+  label{font-size:12px;font-weight:bold;color:#555;display:block;margin-bottom:4px}
+  input,select,textarea{width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;font-size:13px}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:#2a5298}
+  .btn{background:#2a5298;color:#fff;border:none;padding:10px 18px;border-radius:6px;font-size:13px;font-weight:bold;cursor:pointer}
+  .btn:hover{background:#1e3c72}
+  .btn.green{background:#16a34a}.btn.green:hover{background:#15803d}
+  .btn.red{background:#dc2626}.btn.red:hover{background:#b91c1c}
+  .btn.gray{background:#6b7280}.btn.gray:hover{background:#4b5563}
+  .btn.orange{background:#f59e0b}.btn.orange:hover{background:#d97706}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:8px 6px;border-bottom:1px solid #eee}
+  th{background:#f8fafc;color:#475569;font-size:11px;text-transform:uppercase}
+  .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:bold}
+  .badge.ok{background:#dcfce7;color:#166534}
+  .badge.pending{background:#fef3c7;color:#92400e}
+  .badge.blue{background:#dbeafe;color:#1e40af}
+  .stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
+  .stat{background:#fff;padding:16px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,.05);border-left:4px solid #2a5298}
+  .stat small{color:#64748b;font-size:11px;font-weight:bold}
+  .stat h3{font-size:22px;margin-top:4px;color:#1e3c72}
+  .toast{position:fixed;bottom:20px;right:20px;background:#16a34a;color:#fff;padding:12px 20px;border-radius:8px;font-weight:bold;opacity:0;transition:.3s;z-index:999;font-size:13px}
+  .toast.show{opacity:1}
+  .flex{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .edit-mode{background:#fef3c7 !important;border:2px solid #f59e0b !important}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🌐 WiFi Bill Management</h1>
+  <small>Ahmad Basyit — Sistem Penagihan Online</small>
+</header>
+
+<nav>
+  <button class="active" onclick="showPage('dashboard',this)">📊 Dashboard</button>
+  <button onclick="showPage('pelanggan',this)">👥 Pelanggan</button>
+  <button onclick="showPage('tagihan',this)">🧾 Tagihan</button>
+  <button onclick="showPage('pembayaran',this)">💳 Pembayaran</button>
+  <button onclick="showPage('income',this)">💰 Income</button>
+  <button onclick="showPage('gangguan',this)">⚠️ Gangguan</button>
+</nav>
+
+<main>
+
+<!-- DASHBOARD -->
+<section id="dashboard" class="page active">
+  <div class="stat-grid">
+    <div class="stat"><small>Total Pelanggan</small><h3 id="statPelanggan">0</h3></div>
+    <div class="stat" style="border-left-color:#16a34a"><small>Income Bulan Ini</small><h3 id="statIncome">Rp 0</h3></div>
+    <div class="stat" style="border-left-color:#f59e0b"><small>Tagihan Pending</small><h3 id="statPending">0</h3></div>
+    <div class="stat" style="border-left-color:#dc2626"><small>Laporan Gangguan</small><h3 id="statGangguan">0</h3></div>
+  </div>
+  <div class="card">
+    <h2>Grafik Income Bulanan</h2>
+    <canvas id="chartIncome" height="80"></canvas>
+  </div>
+</section>
+
+<!-- PELANGGAN -->
+<section id="pelanggan" class="page">
+  <div class="card" id="formPelanggan">
+    <h2 id="formPelangganTitle">Tambah Pelanggan</h2>
+    <input type="hidden" id="p_editid" value="">
+    <div class="grid">
+      <div><label>Nama</label><input id="p_nama"></div>
+      <div><label>NIK</label><input id="p_nik"></div>
+      <div><label>Alamat</label><input id="p_alamat"></div>
+      <div><label>Telepon</label><input id="p_telp"></div>
+      <div><label>Email</label><input id="p_email"></div>
+      <div><label>Tgl Pemasangan</label><input id="p_tgl" type="date"></div>
+      <div><label>Dokumentasi (Foto)</label><input id="p_dok" type="file" accept="image/*"></div>
+    </div>
+    <div style="margin-top:14px" class="flex">
+      <button class="btn" id="btnSimpanPelanggan" onclick="simpanPelanggan()">➕ Simpan</button>
+      <button class="btn gray hidden" id="btnBatalEdit" onclick="batalEditPelanggan()">✖ Batal Edit</button>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Daftar Pelanggan</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Nama</th><th>NIK</th><th>Alamat</th><th>Telp</th><th>Email</th><th>Tgl</th><th>Foto</th><th>Aksi</th></tr></thead>
+        <tbody id="tblPelanggan"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- TAGIHAN -->
+<section id="tagihan" class="page">
+  <div class="card">
+    <h2>Generate Tagihan</h2>
+    <div class="grid">
+      <div><label>Pelanggan</label><select id="t_pelanggan"></select></div>
+      <div><label>Periode (Bulan)</label><input id="t_bulan" type="month"></div>
+      <div><label>Nominal (Rp)</label><input id="t_nominal" type="number" value="150000"></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn" onclick="generateTagihan()">🧾 Buat Tagihan</button></div>
+  </div>
+  <div class="card">
+    <h2>Daftar Tagihan</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Pelanggan</th><th>Periode</th><th>Nominal</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="tblTagihan"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- PEMBAYARAN -->
+<section id="pembayaran" class="page">
+  <div class="card">
+    <h2>Rekening Transfer</h2>
+    <div class="grid">
+      <div style="background:#f8fafc;padding:14px;border-radius:8px;border-left:4px solid #1e3c72">
+        <b>🏦 Bank Mandiri</b><br>No. Rek: <b>1640006614236</b><br>A/N: <b>AHMAD BASYIT</b>
+      </div>
+      <div style="background:#f8fafc;padding:14px;border-radius:8px;border-left:4px solid #dc2626">
+        <b>🏦 Bank BCA</b><br>No. Rek: <b>4730892069</b><br>A/N: <b>AHMAD BASYIT</b>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Konfirmasi Pembayaran</h2>
+    <div class="grid">
+      <div><label>Pilih Tagihan</label><select id="pay_tagihan"></select></div>
+      <div><label>Metode</label>
+        <select id="pay_metode"><option>Bank Mandiri</option><option>Bank BCA</option></select>
+      </div>
+      <div><label>Nama Pengirim</label><input id="pay_nama"></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn green" onclick="konfirmasiBayar()">✅ Konfirmasi Sudah Bayar</button></div>
+  </div>
+  <div class="card">
+    <h2>Riwayat Transaksi Tagihan</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Pelanggan</th><th>Periode</th><th>Nominal</th><th>Metode</th><th>Waktu</th></tr></thead>
+        <tbody id="tblTransaksi"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- INCOME -->
+<section id="income" class="page">
+  <div class="stat-grid">
+    <div class="stat"><small>Income Tagihan Bulan Ini</small><h3 id="incBulan">Rp 0</h3></div>
+    <div class="stat" style="border-left-color:#8b5cf6"><small>Income Manual Bulan Ini</small><h3 id="incManualBulan">Rp 0</h3></div>
+    <div class="stat" style="border-left-color:#16a34a"><small>Total Income Tahun Ini</small><h3 id="incTahun">Rp 0</h3></div>
+    <div class="stat" style="border-left-color:#f59e0b"><small>Total Transaksi</small><h3 id="incTotal">0</h3></div>
+  </div>
+
+  <div class="card">
+    <h2 id="formIncomeTitle">Tambah Income Manual</h2>
+    <input type="hidden" id="inc_editid" value="">
+    <div class="grid">
+      <div><label>Sumber / Keterangan</label><input id="inc_ket" placeholder="Contoh: Pemasangan baru, denda, dll"></div>
+      <div><label>Nominal (Rp)</label><input id="inc_nominal" type="number"></div>
+      <div><label>Tanggal</label><input id="inc_tgl" type="date"></div>
+      <div><label>Kategori</label>
+        <select id="inc_kategori">
+          <option>Pemasangan Baru</option>
+          <option>Denda Keterlambatan</option>
+          <option>Penjualan Perangkat</option>
+          <option>Lainnya</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:14px" class="flex">
+      <button class="btn green" id="btnSimpanIncome" onclick="simpanIncome()">➕ Simpan Income</button>
+      <button class="btn gray hidden" id="btnBatalIncome" onclick="batalEditIncome()">✖ Batal Edit</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Income Manual</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Tanggal</th><th>Keterangan</th><th>Kategori</th><th>Nominal</th><th>Aksi</th></tr></thead>
+        <tbody id="tblIncomeManual"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Rekap Income per Bulan (Gabungan)</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Periode</th><th>Income Tagihan</th><th>Income Manual</th><th>Total</th></tr></thead>
+        <tbody id="tblIncome"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- GANGGUAN -->
+<section id="gangguan" class="page">
+  <div class="card">
+    <h2>Lapor Gangguan</h2>
+    <div class="grid">
+      <div><label>Pelanggan</label><select id="g_pelanggan"></select></div>
+      <div><label>Jenis</label>
+        <select id="g_jenis">
+          <option>Internet Lambat</option><option>Koneksi Putus</option>
+          <option>Router Mati</option><option>Lainnya</option>
+        </select>
+      </div>
+      <div><label>Tanggal</label><input id="g_tgl" type="date"></div>
+      <div style="grid-column:1/-1"><label>Deskripsi</label><textarea id="g_desk" rows="2"></textarea></div>
+    </div>
+    <div style="margin-top:14px"><button class="btn red" onclick="tambahGangguan()">⚠️ Kirim Laporan</button></div>
+  </div>
+  <div class="card">
+    <h2>Daftar Gangguan</h2>
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr><th>#</th><th>Pelanggan</th><th>Jenis</th><th>Deskripsi</th><th>Tgl</th><th>Status</th><th>Aksi</th></tr></thead>
+        <tbody id="tblGangguan"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ STORAGE ============ */
+function get(k){ return JSON.parse(localStorage.getItem('wifi_'+k) || '[]'); }
+function set(k,v){ localStorage.setItem('wifi_'+k, JSON.stringify(v)); }
+
+/* ============ NAV ============ */
+function showPage(id, btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(id==='dashboard') renderDashboard();
+  if(id==='pelanggan'){ renderPelanggan(); batalEditPelanggan(); }
+  if(id==='tagihan'){ renderTagihan(); fillSelect('t_pelanggan'); }
+  if(id==='pembayaran'){ renderTransaksi(); fillPayTagihan(); }
+  if(id==='income'){ renderIncome(); renderIncomeManual(); batalEditIncome(); }
+  if(id==='gangguan'){ renderGangguan(); fillSelect('g_pelanggan'); }
+}
+
+/* ============ TOAST ============ */
+function toast(msg, color){
+  color = color || '#16a34a';
+  var t = document.getElementById('toast');
+  t.textContent = msg; t.style.background = color;
+  t.classList.add('show');
+  setTimeout(function(){ t.classList.remove('show'); }, 2500);
+}
+
+/* ============ PELANGGAN (TAMBAH + EDIT) ============ */
+var editFotoBase64 = null; // menyimpan foto saat edit jika tidak ganti foto
+
+function simpanPelanggan(){
+  var editId = document.getElementById('p_editid').value;
+  var nama = document.getElementById('p_nama').value.trim();
+  var nik = document.getElementById('p_nik').value.trim();
+  if(!nama || !nik) return toast('Nama & NIK wajib diisi', '#dc2626');
+
+  var file = document.getElementById('p_dok').files[0];
+  var proses = function(dokData){
+    var data = get('pelanggan');
+
+    if(editId){
+      // MODE EDIT
+      var idx = data.findIndex(function(p){ return p.id === editId; });
+      if(idx === -1) return toast('Pelanggan tidak ditemukan', '#dc2626');
+      data[idx].nama = nama;
+      data[idx].nik = nik;
+      data[idx].alamat = document.getElementById('p_alamat').value;
+      data[idx].telp = document.getElementById('p_telp').value;
+      data[idx].email = document.getElementById('p_email').value;
+      data[idx].tgl = document.getElementById('p_tgl').value;
+      if(dokData) data[idx].dok = dokData; // hanya update foto jika ada file baru
+      set('pelanggan', data);
+      renderPelanggan();
+      batalEditPelanggan();
+      toast('✅ Data pelanggan diperbarui');
+    } else {
+      // MODE TAMBAH
+      data.push({
+        id: 'P' + Date.now(),
+        nama: nama, nik: nik,
+        alamat: document.getElementById('p_alamat').value,
+        telp: document.getElementById('p_telp').value,
+        email: document.getElementById('p_email').value,
+        tgl: document.getElementById('p_tgl').value,
+        dok: dokData
+      });
+      set('pelanggan', data);
+      renderPelanggan();
+      resetFormPelanggan();
+      toast('Pelanggan ditambahkan');
+    }
+  };
+
+  if(file){
+    var reader = new FileReader();
+    reader.onload = function(e){ proses(e.target.result); };
+    reader.readAsDataURL(file);
+  } else {
+    proses(editId ? null : '');
+  }
+}
+
+function editPelanggan(id){
+  var p = get('pelanggan').find(function(x){ return x.id === id; });
+  if(!p) return;
+
+  document.getElementById('p_editid').value = p.id;
+  document.getElementById('p_nama').value = p.nama;
+  document.getElementById('p_nik').value = p.nik;
+  document.getElementById('p_alamat').value = p.alamat || '';
+  document.getElementById('p_telp').value = p.telp || '';
+  document.getElementById('p_email').value = p.email || '';
+  document.getElementById('p_tgl').value = p.tgl || '';
+  document.getElementById('p_dok').value = '';
+
+  document.getElementById('formPelangganTitle').textContent = '✏️ Edit Pelanggan: ' + p.nama;
+  document.getElementById('formPelanggan').classList.add('edit-mode');
+  document.getElementById('btnSimpanPelanggan').textContent = '💾 Update';
+  document.getElementById('btnBatalEdit').classList.remove('hidden');
+
+  window.scrollTo({top: 0, behavior: 'smooth'});
+  toast('Mode edit aktif', '#f59e0b');
+}
+
+function batalEditPelanggan(){
+  document.getElementById('p_editid').value = '';
+  resetFormPelanggan();
+  document.getElementById('formPelangganTitle').textContent = 'Tambah Pelanggan';
+  document.getElementById('formPelanggan').classList.remove('edit-mode');
+  document.getElementById('btnSimpanPelanggan').textContent = '➕ Simpan';
+  document.getElementById('btnBatalEdit').classList.add('hidden');
+}
+
+function resetFormPelanggan(){
+  ['p_nama','p_nik','p_alamat','p_telp','p_email','p_tgl','p_dok'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
+}
+
+function renderPelanggan(){
+  var data = get('pelanggan');
+  var tbl = document.getElementById('tblPelanggan');
+  if(!data.length){
+    tbl.innerHTML = '<tr><td colspan="9" style="text-align:center;color:#999;padding:16px">Belum ada pelanggan</td></tr>';
+    return;
+  }
+  var html = '';
+  data.forEach(function(p,i){
+    var foto = p.dok ? '<img src="'+p.dok+'" style="width:36px;height:36px;object-fit:cover;border-radius:4px">' : '-';
+    html += '<tr><td>'+(i+1)+'</td><td><b>'+p.nama+'</b></td><td>'+p.nik+'</td><td>'+(p.alamat||'-')+'</td><td>'+(p.telp||'-')+'</td><td>'+(p.email||'-')+'</td><td>'+(p.tgl||'-')+'</td><td>'+foto+'</td>';
+    html += '<td>';
+    html += '<button class="btn orange" style="padding:4px 8px;font-size:11px;margin-right:4px" onclick="editPelanggan(\''+p.id+'\')">✏️ Edit</button>';
+    html += '<button class="btn red" style="padding:4px 8px;font-size:11px" onclick="hapusPelanggan(\''+p.id+'\')">Hapus</button>';
+    html += '</td></tr>';
+  });
+  tbl.innerHTML = html;
+}
+
+function hapusPelanggan(id){
+  if(!confirm('Hapus pelanggan ini?')) return;
+  set('pelanggan', get('pelanggan').filter(function(p){ return p.id !== id; }));
+  renderPelanggan();
+  toast('Pelanggan dihapus', '#dc2626');
+}
+
+/* ============ FILL SELECT ============ */
+function fillSelect(selectId){
+  var data = get('pelanggan');
+  var el = document.getElementById(selectId);
+  var html = '';
+  data.forEach(function(p){ html += '<option value="'+p.id+'">'+p.nama+'</option>'; });
+  el.innerHTML = html || '<option value="">(Belum ada pelanggan)</option>';
+}
+
+function fillPayTagihan(){
+  var data = get('tagihan').filter(function(t){ return t.status !== 'paid'; });
+  var el = document.getElementById('pay_tagihan');
+  var html = '';
+  data.forEach(function(t){
+    html += '<option value="'+t.id+'">'+t.nama+' — '+t.bulan+' — Rp '+t.nominal.toLocaleString('id-ID')+'</option>';
+  });
+  el.innerHTML = html || '<option value="">Tidak ada tagihan pending</option>';
+}
+
+/* ============ TAGIHAN ============ */
+function generateTagihan(){
+  var pid = document.getElementById('t_pelanggan').value;
+  var bulan = document.getElementById('t_bulan').value;
+  var nominal = parseInt(document.getElementById('t_nominal').value);
+  if(!pid || !bulan || !nominal) return toast('Lengkapi semua data', '#dc2626');
+
+  var pel = get('pelanggan').find(function(p){ return p.id === pid; });
+  if(!pel) return toast('Pelanggan tidak ditemukan', '#dc2626');
+
+  var data = get('tagihan');
+  var duplikat = data.find(function(t){ return t.pid === pid && t.bulan === bulan; });
+  if(duplikat) return toast('Tagihan periode ini sudah ada', '#f59e0b');
+
+  data.push({
+    id: 'T' + Date.now(),
+    pid: pid, nama: pel.nama, bulan: bulan, nominal: nominal,
+    status: 'pending', tglBuat: new Date().toISOString()
+  });
+  set('tagihan', data);
+  renderTagihan();
+  toast('Tagihan dibuat');
+}
+
+function renderTagihan(){
+  var data = get('tagihan').slice().reverse();
+  var tbl = document.getElementById('tblTagihan');
+  if(!data.length){
+    tbl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:16px">Belum ada tagihan</td></tr>';
+    return;
+  }
+  var html = '';
+  data.forEach(function(t,i){
+    var status = t.status === 'paid'
+      ? '<span class="badge ok">Lunas</span>'
+      : '<span class="badge pending">Belum Bayar</span>';
+    html += '<tr><td>'+(i+1)+'</td><td><b>'+t.nama+'</b></td><td>'+t.bulan+'</td>';
+    html += '<td>Rp '+t.nominal.toLocaleString('id-ID')+'</td><td>'+status+'</td>';
+    html += '<td><button class="btn" style="padding:4px 8px;font-size:11px" onclick="cetakTagihan(\''+t.id+'\')">🖨️ Cetak</button> ';
+    if(t.status !== 'paid'){
+      html += '<button class="btn red" style="padding:4px 8px;font-size:11px" onclick="hapusTagihan(\''+t.id+'\')">Hapus</button>';
+    }
+    html += '</td></tr>';
+  });
+  tbl.innerHTML = html;
+}
+
+function hapusTagihan(id){
+  if(!confirm('Hapus tagihan?')) return;
+  set('tagihan', get('tagihan').filter(function(t){ return t.id !== id; }));
+  renderTagihan();
+  toast('Tagihan dihapus', '#dc2626');
+}
+
+function cetakTagihan(id){
+  var t = get('tagihan').find(function(x){ return x.id === id; });
+  if(!t) return;
+  var pel = get('pelanggan').find(function(p){ return p.id === t.pid; }) || {};
+  var win = window.open('', '_blank', 'width=700,height=800');
+  win.document.write(
+    '<html><head><title>Tagihan '+t.nama+'</title>' +
+    '<style>body{font-family:Arial;padding:30px}h2{background:#1e3c72;color:#fff;padding:12px;margin:0 0 20px}' +
+    'table{width:100%;border-collapse:collapse;font-size:13px}td{padding:6px 4px;border-bottom:1px solid #eee}' +
+    '.total{background:#f0f2f5;font-weight:bold;font-size:15px}.info{margin-top:20px;padding:12px;background:#f8fafc;border-radius:6px;font-size:12px}' +
+    'small{color:#888}</style></head><body>' +
+    '<h2>TAGIHAN INTERNET WIFI</h2>' +
+    '<small>Ahmad Basyit — WiFi Bill Management</small>' +
+    '<table style="margin-top:16px">' +
+    '<tr><td width="130"><b>No. Tagihan</b></td><td>'+t.id+'</td></tr>' +
+    '<tr><td><b>Nama</b></td><td>'+t.nama+'</td></tr>' +
+    '<tr><td><b>NIK</b></td><td>'+(pel.nik||'-')+'</td></tr>' +
+    '<tr><td><b>Alamat</b></td><td>'+(pel.alamat||'-')+'</td></tr>' +
+    '<tr><td><b>Telepon</b></td><td>'+(pel.telp||'-')+'</td></tr>' +
+    '<tr><td><b>Periode</b></td><td>'+t.bulan+'</td></tr>' +
+    '<tr><td><b>Status</b></td><td>'+(t.status==='paid'?'LUNAS':'BELUM BAYAR')+'</td></tr>' +
+    '<tr class="total"><td>TOTAL</td><td>Rp '+t.nominal.toLocaleString('id-ID')+'</td></tr>' +
+    '</table>' +
+    '<div class="info"><b>Transfer ke:</b><br>' +
+    'Bank Mandiri: 1640006614236 (A/N AHMAD BASYIT)<br>' +
+    'Bank BCA: 4730892069 (A/N AHMAD BASYIT)</div>' +
+    '<p style="font-size:11px;color:#888;margin-top:20px">Harap konfirmasi pembayaran setelah transfer. Terima kasih.</p>' +
+    '<script>window.onload=function(){window.print()}<\/script>' +
+    '</body></html>'
+  );
+  win.document.close();
+}
+
+/* ============ PEMBAYARAN ============ */
+function konfirmasiBayar(){
+  var id = document.getElementById('pay_tagihan').value;
+  if(!id) return toast('Tidak ada tagihan', '#dc2626');
+
+  var data = get('tagihan');
+  var t = data.find(function(x){ return x.id === id; });
+  if(!t) return;
+
+  t.status = 'paid';
+  t.metode = document.getElementById('pay_metode').value;
+  t.pengirim = document.getElementById('pay_nama').value || '-';
+  t.waktu = new Date().toISOString();
+  set('tagihan', data);
+
+  var trx = get('transaksi');
+  trx.push({
+    id: t.id, nama: t.nama, bulan: t.bulan, nominal: t.nominal,
+    metode: t.metode, waktu: t.waktu
+  });
+  set('transaksi', trx);
+
+  document.getElementById('pay_nama').value = '';
+  renderTransaksi();
+  fillPayTagihan();
+  renderTagihan();
+  toast('✅ Pembayaran berhasil dikonfirmasi');
+}
+
+function renderTransaksi(){
+  var data = get('transaksi').slice().reverse();
+  var tbl = document.getElementById('tblTransaksi');
+  if(!data.length){
+    tbl.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#999;padding:16px">Belum ada transaksi</td></tr>';
+    return;
+  }
+  var html = '';
+  data.forEach(function(t,i){
+    html += '<tr><td>'+(i+1)+'</td><td><b>'+t.nama+'</b></td><td>'+t.bulan+'</td>';
+    html += '<td>Rp '+t.nominal.toLocaleString('id-ID')+'</td><td>'+t.metode+'</td>';
+    html += '<td>'+new Date(t.waktu).toLocaleString('id-ID')+'</td></tr>';
+  });
+  tbl.innerHTML = html;
+}
+
+/* ============ INCOME MANUAL (TAMBAH + EDIT) ============ */
+function simpanIncome(){
+  var editId = document.getElementById('inc_editid').value;
+  var ket = document.getElementById('inc_ket').value.trim();
+  var nominal = parseInt(document.getElementById('inc_nominal').value);
+  var tgl = document.getElementById('inc_tgl').value || new Date().toISOString().slice(0,10);
+  var kategori = document.getElementById('inc_kategori').value;
+
+  if(!ket || !nominal) return toast('Keterangan & nominal wajib diisi', '#dc2626');
+
+  var data = get('incomeManual');
+
+  if(editId){
+    var idx = data.findIndex(function(x){ return x.id === editId; });
+    if(idx === -1) return toast('Data tidak ditemukan', '#dc2626');
+    data[idx].ket = ket;
+    data[idx].nominal = nominal;
+    data[idx].tgl = tgl;
+    data[idx].kategori = kategori;
+    set('incomeManual', data);
+    renderIncomeManual();
+    renderIncome();
+    batalEditIncome();
+    toast('✅ Income diperbarui');
+  } else {
+    data.push({
+      id: 'I' + Date.now(),
+      ket: ket, nominal: nominal, tgl: tgl, kategori: kategori
+    });
+    set('incomeManual', data);
+    renderIncomeManual();
+    renderIncome();
+    resetFormIncome();
+    toast('Income manual ditambahkan');
+  }
+}
+
+function editIncome(id){
+  var x = get('incomeManual').find(function(v){ return v.id === id; });
+  if(!x) return;
+  document.getElementById('inc_editid').value = x.id;
+  document.getElementById('inc_ket').value = x.ket;
+  document.getElementById('inc_nominal').value = x.nominal;
+  document.getElementById('inc_tgl').value = x.tgl;
+  document.getElementById('inc_kategori').value = x.kategori;
+
+  document.getElementById('formIncomeTitle').textContent = '✏️ Edit Income: ' + x.ket;
+  document.getElementById('btnSimpanIncome').textContent = '💾 Update';
+  document
